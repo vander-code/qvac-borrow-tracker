@@ -1,0 +1,17 @@
+{
+  "name": "qvac-borrow-tracker",
+  "version": "1.0.0",
+  "description": "Borrow/Return Tracker: keep track of who borrowed what. On-device AI (QVAC SDK) fills in entries from a sentence and writes polite reminders.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@qvac/sdk": "^0.19.0"
+  },
+  "engines": {
+    "node": ">=22.17"
+  },
+  "license": "MIT"
+}
