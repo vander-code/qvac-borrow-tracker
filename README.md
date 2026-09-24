@@ -22,7 +22,7 @@ QVAC functions used: `loadModel`, `completion` and `unloadModel`, with the `LLAM
 You need [Node.js](https://nodejs.org) 22.17 or newer.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/qvac-borrow-tracker.git
+git clone https://github.com/vander-code/qvac-borrow-tracker.git
 cd qvac-borrow-tracker
 npm install
 ```
