@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lendbook: Borrow/Return Tracker</title>
+<style>
+  :root {
+    --paper: #eef3ee;
+    --card: #ffffff;
+    --ink: #14201b;
+    --muted: #5b6b63;
+    --line: #cbd6cf;
+    --stamp: #2340c8;
+    --late: #b3204d;
+    --ok: #1f7a55;
+    --wash: #dfe8e1;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body { margin: 0; color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 56px; }
+
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 22px; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.4rem, 6vw, 3.5rem); letter-spacing: -0.02em; margin: 0; line-height: 1.05; }
+  .tag { margin: 6px 0 0; color: var(--muted); }
+  .summary { font-family: Georgia, serif; font-size: 1.35rem; text-align: right; }
+  .summary b { color: var(--stamp); }
+  .summary .late { color: var(--late); }
+
+  .status { padding: 10px 14px; border: 1px solid var(--line); background: var(--card); border-radius: 10px; font-size: .92rem; margin-bottom: 24px; }
+  .status .bar { height: 6px; background: var(--wash); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .status .bar i { display: block; height: 100%; width: 0; background: var(--stamp); transition: width .4s; }
+  .status.ready .bar { display: none; }
+  .status.error { border-color: var(--late); color: var(--late); }
+
+  main { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .card + .card { margin-top: 18px; }
+  h2 { font-family: Georgia, serif; font-size: 1.25rem; margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: .9rem; margin: 0 0 12px; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: .95rem; }
+  input, textarea, select { width: 100%; font: inherit; color: var(--ink); padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fbfdfb; }
+  textarea { min-height: 70px; resize: vertical; }
+  input:focus, textarea:focus, select:focus { outline: 3px solid rgba(35,64,200,.3); border-color: var(--stamp); }
+
+  button { font: inherit; font-weight: 600; cursor: pointer; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--stamp); background: var(--stamp); color: #fff; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--stamp); }
+  button.ghost:hover:not(:disabled) { background: #e8ecfb; filter: none; }
+  button.danger { color: var(--late); border-color: var(--late); }
+  button.danger:hover:not(:disabled) { background: #fbe9ef; filter: none; }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .msg { font-size: .9rem; margin: 10px 0 0; min-height: 1.3em; color: var(--muted); }
+  .msg.bad { color: var(--late); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab { background: transparent; color: var(--ink); border-color: var(--line); }
+  .tab[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .loan { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .loan-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .item { font-family: Georgia, serif; font-size: 1.2rem; font-weight: 700; overflow-wrap: anywhere; }
+  .who { color: var(--muted); font-size: .92rem; }
+  .note { font-size: .92rem; margin-top: 4px; }
+  .stamp { flex: none; border: 2px solid var(--stamp); color: var(--stamp); border-radius: 5px; padding: 2px 10px; font-weight: 700; font-size: .9rem; transform: rotate(-2deg); white-space: nowrap; background: #fff; }
+  .stamp.late { border-color: var(--late); color: var(--late); }
+  .stamp.done { border-color: var(--ok); color: var(--ok); }
+  .stamp.none { border-style: dashed; color: var(--muted); border-color: var(--muted); }
+  .loan .actions { margin-top: 10px; }
+
+  .reminder { margin-top: 12px; padding: 12px; background: var(--paper); border-radius: 8px; border: 1px solid var(--line); }
+  .reminder .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .reminder select { width: auto; }
+  .draft { font-family: Georgia, serif; font-size: 1.05rem; line-height: 1.65; white-space: pre-wrap; margin-top: 10px; }
+  .caret::after { content: ""; display: inline-block; width: 2px; height: 1.05em; background: var(--stamp); margin-left: 2px; vertical-align: text-bottom; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret::after { animation: none; } .status .bar i { transition: none; } }
+
+  .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 28px; text-align: center; }
+  footer { margin-top: 28px; color: var(--muted); font-size: .88rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Lendbook</h1>
+      <p class="tag">Who has your stuff, and when it is coming back.</p>
+    </div>
+    <div class="summary" id="summary" aria-live="polite"></div>
+  </header>
+
+  <div class="status" id="status" role="status" aria-live="polite">
+    <span id="statusText">Connecting...</span>
+    <div class="bar"><i id="barFill"></i></div>
+  </div>
+
+  <main>
+    <section aria-label="Add a loan">
+      <div class="card">
+        <h2>Quick add with AI</h2>
+        <p class="hint">Type it the way you would say it. The on-device AI fills in the form below.</p>
+        <textarea id="sentence" placeholder="e.g. Lent my drill to Sam, he'll bring it back on Friday"></textarea>
+        <div class="actions"><button class="ghost" id="fill" disabled>Fill in the form</button></div>
+        <p class="msg" id="fillMsg"></p>
+      </div>
+
+      <div class="card">
+        <h2>Lend something</h2>
+        <label for="item">Item</label>
+        <input id="item" maxlength="80" placeholder="Cordless drill">
+        <label for="person">Borrowed by</label>
+        <input id="person" maxlength="80" placeholder="Sam">
+        <label for="due">Return by (optional)</label>
+        <input id="due" type="date">
+        <label for="note">Note (optional)</label>
+        <input id="note" maxlength="200" placeholder="Includes the blue case">
+        <div class="actions"><button id="save">Save loan</button></div>
+        <p class="msg" id="saveMsg"></p>
+      </div>
+    </section>
+
+    <section aria-label="Loans">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-out" aria-selected="true">Out on loan</button>
+        <button class="tab" role="tab" id="tab-back" aria-selected="false">Returned</button>
+      </div>
+      <div id="list"></div>
+    </section>
+  </main>
+
+  <footer>Your list is saved only on this computer. AI: Llama 3.2 1B running locally through the QVAC SDK. Small models can slip up, so check the details before saving.</footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let loans = [];
+  let tab = 'out';
+  let aiReady = false;
+  let aiBusy = false;
+
+  // ---------- helpers ----------
+  function el(tag, props = {}, ...kids) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === 'class') node.className = v;
+      else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v);
+    }
+    for (const kid of kids) node.append(kid);
+    return node;
+  }
+  const pad = (n) => String(n).padStart(2, '0');
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  function toDate(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+  function daysBetween(a, b) { return Math.round((toDate(b) - toDate(a)) / 86400000); }
+  function pretty(s) { return toDate(s).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }); }
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+  async function api(url, options = {}) {
+    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+    return data;
+  }
+
+  // ---------- AI status ----------
+  function refreshAiButtons() {
+    $('fill').disabled = !aiReady || aiBusy;
+    document.querySelectorAll('.write-btn').forEach((b) => { b.disabled = !aiReady || aiBusy; });
+  }
+  async function pollStatus() {
+    try {
+      const s = await api('/api/status');
+      $('statusText').textContent = s.message;
+      $('barFill').style.width = s.percent + '%';
+      $('status').className = 'status ' + s.state;
+      aiReady = s.state === 'ready';
+      refreshAiButtons();
+      if (s.state === 'loading') setTimeout(pollStatus, 1000);
+    } catch {
+      $('statusText').textContent = 'Cannot reach the app. Is it still running in the terminal?';
+      setTimeout(pollStatus, 3000);
+    }
+  }
+
+  // ---------- list ----------
+  function stampFor(loan) {
+    if (loan.returned) return el('span', { class: 'stamp done' }, `Returned ${pretty(loan.returned)}`);
+    if (!loan.due) return el('span', { class: 'stamp none' }, 'No return date');
+    const diff = daysBetween(todayStr(), loan.due);
+    if (diff < 0) return el('span', { class: 'stamp late' }, `Overdue by ${plural(-diff, 'day')}`);
+    if (diff === 0) return el('span', { class: 'stamp' }, 'Due today');
+    return el('span', { class: 'stamp' }, `Due ${pretty(loan.due)}`);
+  }
+
+  function renderSummary() {
+    const out = loans.filter((l) => !l.returned);
+    const late = out.filter((l) => l.due && daysBetween(todayStr(), l.due) < 0);
+    const box = $('summary');
+    box.textContent = '';
+    if (!out.length) { box.textContent = 'Nothing is out on loan.'; return; }
+    box.append(el('b', {}, plural(out.length, 'item')), ' out');
+    if (late.length) box.append(', ', el('span', { class: 'late' }, `${late.length} overdue`));
+    box.append('.');
+  }
+
+  function renderList() {
+    renderSummary();
+    $('tab-out').setAttribute('aria-selected', tab === 'out');
+    $('tab-back').setAttribute('aria-selected', tab === 'back');
+    const list = $('list');
+    list.textContent = '';
+    const shown = loans.filter((l) => (tab === 'out' ? !l.returned : l.returned));
+    if (tab === 'out') {
+      // overdue first, then by due date, then no date
+      shown.sort((a, b) => (a.due || '9999') .localeCompare(b.due || '9999'));
+    }
+    if (!shown.length) {
+      list.append(el('div', { class: 'empty' }, tab === 'out' ? 'Nothing is out on loan. Add a loan on the left.' : 'Nothing has been returned yet.'));
+      return;
+    }
+    for (const loan of shown) list.append(loanCard(loan));
+    refreshAiButtons();
+  }
+
+  function loanCard(loan) {
+    const card = el('div', { class: 'loan' });
+    const info = el('div', {},
+      el('div', { class: 'item' }, loan.item),
+      el('div', { class: 'who' }, `Borrowed by ${loan.person}, lent ${pretty(loan.lent)}`));
+    if (loan.note) info.append(el('div', { class: 'note' }, loan.note));
+    card.append(el('div', { class: 'loan-top' }, info, stampFor(loan)));
+
+    const actions = el('div', { class: 'actions' });
+    actions.append(el('button', { onclick: () => toggleReturn(loan.id) }, loan.returned ? 'Undo return' : 'Mark returned'));
+    if (!loan.returned) {
+      const panel = el('div', { class: 'reminder', hidden: '' });
+      actions.append(el('button', { class: 'ghost', onclick: () => { panel.hidden = !panel.hidden; } }, 'Write a reminder'));
+      card.append(actions, panel);
+      buildReminder(panel, loan);
+    } else {
+      card.append(actions);
+    }
+    actions.append(el('button', { class: 'danger', onclick: () => removeLoan(loan) }, 'Delete'));
+    return card;
+  }
+
+  function buildReminder(panel, loan) {
+    const tone = el('select', { 'aria-label': 'Tone' },
+      el('option', { value: 'friendly' }, 'Friendly'),
+      el('option', { value: 'funny' }, 'Playful'),
+      el('option', { value: 'firm' }, 'Firm but polite'));
+    const draft = el('div', { class: 'draft', 'aria-live': 'polite' });
+    const copyBtn = el('button', { class: 'ghost', hidden: '' }, 'Copy');
+    const writeBtn = el('button', { class: 'write-btn' }, 'Write it');
+    writeBtn.disabled = !aiReady || aiBusy;
+
+    writeBtn.addEventListener('click', async () => {
+      aiBusy = true; refreshAiButtons();
+      draft.className = 'draft caret'; draft.textContent = ''; copyBtn.hidden = true;
+      try {
+        const res = await fetch('/api/reminder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: loan.id, tone: tone.value }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          draft.textContent = err.error || 'Something went wrong.';
+        } else {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            draft.textContent += decoder.decode(value, { stream: true });
+          }
+        }
+      } catch {
+        draft.textContent += '\n[Connection lost.]';
+      } finally {
+        draft.classList.remove('caret');
+        aiBusy = false; refreshAiButtons();
+        copyBtn.hidden = !draft.textContent.trim();
+      }
+    });
+    copyBtn.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(draft.textContent.trim());
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => (copyBtn.textContent = 'Copy'), 1500);
+    });
+    panel.append(el('div', { class: 'row' }, tone, writeBtn, copyBtn), draft);
+  }
+
+  // ---------- actions ----------
+  async function loadLoans() { loans = await api('/api/loans'); renderList(); }
+
+  async function toggleReturn(id) { await api(`/api/loans/${id}/return`, { method: 'POST' }); await loadLoans(); }
+  async function removeLoan(loan) {
+    if (!confirm(`Delete "${loan.item}" lent to ${loan.person}?`)) return;
+    await api(`/api/loans/${loan.id}`, { method: 'DELETE' });
+    await loadLoans();
+  }
+
+  $('save').addEventListener('click', async () => {
+    const msg = $('saveMsg');
+    msg.className = 'msg'; msg.textContent = '';
+    try {
+      await api('/api/loans', {
+        method: 'POST',
+        body: JSON.stringify({ item: $('item').value, person: $('person').value, due: $('due').value, note: $('note').value }),
+      });
+      for (const id of ['item', 'person', 'due', 'note']) $(id).value = '';
+      msg.textContent = 'Saved.';
+      tab = 'out';
+      await loadLoans();
+    } catch (e) { msg.className = 'msg bad'; msg.textContent = e.message; }
+  });
+
+  $('fill').addEventListener('click', async () => {
+    const msg = $('fillMsg');
+    const text = $('sentence').value.trim();
+    if (!text) { $('sentence').focus(); return; }
+    msg.className = 'msg'; msg.textContent = 'Reading your sentence...';
+    aiBusy = true; refreshAiButtons();
+    try {
+      const r = await api('/api/parse', { method: 'POST', body: JSON.stringify({ text }) });
+      if (!r.ok) throw new Error('The AI could not read that. Try rewording it, or fill in the form by hand.');
+      $('item').value = r.item; $('person').value = r.person; $('due').value = r.due || '';
+      msg.textContent = 'Filled in. Check the details, then press Save loan.';
+    } catch (e) { msg.className = 'msg bad'; msg.textContent = e.message; }
+    finally { aiBusy = false; refreshAiButtons(); }
+  });
+
+  $('tab-out').addEventListener('click', () => { tab = 'out'; renderList(); });
+  $('tab-back').addEventListener('click', () => { tab = 'back'; renderList(); });
+
+  pollStatus();
+  loadLoans();
+</script>
+</body>
+</html>
